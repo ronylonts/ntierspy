@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+{% load static project_tags humanize %}
+{% load query_tags from apps.projects.templatetags.query_tags %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header avec actions -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="display-5 fw-bold">
+                <i class="fas fa-project-diagram me-2"></i>
+                Gestion des Projets
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item active" aria-current="page">Tous les projets</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="btn-group">
+            <a href="{% url 'projects:create' %}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-1"></i> Nouveau Projet
+            </a>
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fas fa-ellipsis-v"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#exportModal">
+                        <i class="fas fa-file-export me-2"></i>Exporter
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#importModal">
+                        <i class="fas fa-file-import me-2"></i>Importer
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <a class="dropdown-item" href="#">
+                        <i class="fas fa-sliders-h me-2"></i>Préférences
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Filtres avancés -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                <i class="fas fa-filter me-2"></i>Filtres avancés
+            </button>
+        </div>
+        <div class="collapse {% if filter_form.has_changed %}show{% endif %}" id="filterCollapse">
+            <div class="card-body">
+                <form method="get" class="row g-3" id="projectFilterForm">
+                    <div class="col-md-3">
+                        <label class="form-label">Statut</label>
+                        <select name="status" class="form-select">
+                            <option value="">Tous les statuts</option>
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if request.GET.status == value|stringformat:"s" %}selected{% endif %}>
+                                {{ label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Période</label>
+                        <div class="input-group">
+                            <input type="date" name="start_date" class="form-control" value="{{ request.GET.start_date }}" placeholder="Début">
+                            <span class="input-group-text">à</span>
+                            <input type="date" name="end_date" class="form-control" value="{{ request.GET.end_date }}" placeholder="Fin">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Budget</label>
+                        <select name="budget_range" class="form-select">
+                            <option value="">Tous les budgets</option>
+                            <option value="0-5000" {% if request.GET.budget_range == "0-5000" %}selected{% endif %}>0 - 5 000 €</option>
+                            <option value="5000-20000" {% if request.GET.budget_range == "5000-20000" %}selected{% endif %}>5 000 - 20 000 €</option>
+                            <option value="20000+" {% if request.GET.budget_range == "20000+" %}selected{% endif %}>20 000 € et plus</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Responsable</label>
+                        <select name="manager" class="form-select">
+                            <option value="">Tous les responsables</option>
+                            {% for manager in managers %}
+                            <option value="{{ manager.id }}" {% if request.GET.manager == manager.id|stringformat:"s" %}selected{% endif %}>
+                                {{ manager.get_full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="fas fa-filter me-1"></i> Appliquer
+                            </button>
+                            <a href="{% url 'projects:list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-sync-alt me-1"></i> Réinitialiser
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vue alternative (toggle) -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="btn-group" role="group">
+            <button id="cardViewBtn" class="btn btn-outline-secondary active">
+                <i class="fas fa-th-large"></i>
+            </button>
+            <button id="tableViewBtn" class="btn btn-outline-secondary">
+                <i class="fas fa-list"></i>
+            </button>
+        </div>
+        <div class="d-flex">
+            <div class="input-group me-3" style="width: 250px;">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input type="text" class="form-control" placeholder="Rechercher..." id="projectSearch">
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-sort me-1"></i>
+                    Trier
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item sort-option" href="#" data-sort="name">Par nom (A-Z)</a></li>
+                    <li><a class="dropdown-item sort-option" href="#" data-sort="-name">Par nom (Z-A)</a></li>
+                    <li><a class="dropdown-item sort-option" href="#" data-sort="start_date">Plus ancien</a></li>
+                    <li><a class="dropdown-item sort-option" href="#" data-sort="-start_date">Plus récent</a></li>
+                    <li><a class="dropdown-item sort-option" href="#" data-sort="budget">Budget croissant</a></li>
+                    <li><a class="dropdown-item sort-option" href="#" data-sort="-budget">Budget décroissant</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vue Carte (par défaut) -->
+    <div id="cardView">
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
+            {% for project in projects %}
+                {% include "projects/_project_card.html" %}
+            {% empty %}
+            <div class="col-12">
+                <div class="alert alert-info text-center py-4">
+                    <i class="fas fa-info-circle fa-2x mb-3"></i>
+                    <h4>Aucun projet trouvé</h4>
+                    <p class="mb-0">Essayez de modifier vos critères de recherche ou créez un nouveau projet</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Vue Tableau (cachée par défaut) -->
+    <div id="tableView" class="d-none">
+        <div class="card shadow-sm">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nom</th>
+                            <th>Statut</th>
+                            <th>Dates</th>
+                            <th>Budget</th>
+                            <th>Progression</th>
+                            <th>Responsable</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in projects %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'projects:detail' project.id %}" class="fw-bold">
+                                    {{ project.name }}
+                                </a>
+                                <div class="text-muted small">{{ project.description|truncatechars:50 }}</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ project.get_status_class }}">
+                                    {{ project.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div>{{ project.start_date|date:"d/m/y" }} - {{ project.end_date|date:"d/m/y" }}</div>
+                                <div class="small text-muted">{{ project.days_remaining }} jours restants</div>
+                            </td>
+                            <td class="fw-bold">
+                                {{ project.budget|intcomma }} €
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 6px;">
+                                        <div class="progress-bar bg-{{ project.get_status_class }}" 
+                                             role="progressbar" 
+                                             style="width: {{ project.completion_percentage }}%">
+                                        </div>
+                                    </div>
+                                    <small>{{ project.completion_percentage }}%</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <img src="{{ project.manager.profile.image.url }}" 
+                                         class="rounded-circle me-2" 
+                                         width="30" 
+                                         height="30"
+                                         alt="{{ project.manager.get_full_name }}"
+                                         data-bs-toggle="tooltip" 
+                                         data-bs-placement="top" 
+                                         title="{{ project.manager.get_full_name }}">
+                                    <span>{{ project.manager.get_full_name|truncatechars:12 }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'projects:update' project.id %}" class="btn btn-outline-primary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'projects:delete' project.id %}" class="btn btn-outline-danger">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>Aucun projet trouvé
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination et stats -->
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <div class="text-muted">
+            Affichage de <strong>{{ page_obj.start_index }}</strong> à <strong>{{ page_obj.end_index }}</strong> 
+            sur <strong>{{ paginator.count }}</strong> projets
+        </div>
+        
+        {% if is_paginated %}
+        <nav>
+            <ul class="pagination">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?{% query_transform page=page_obj.previous_page_number %}">
+                        &laquo;
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% query_transform page=num %}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?{% query_transform page=page_obj.next_page_number %}">
+                        &raquo;
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal d'export -->
+<div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-export me-2"></i>
+                    Exporter les projets
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'projects:export' %}">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <input type="hidden" name="filter_params" value="{{ request.GET.urlencode }}">
+                    <div class="mb-3">
+                        <label class="form-label">Format</label>
+                        <select name="format" class="form-select">
+                            <option value="csv">CSV (Excel)</option>
+                            <option value="json">JSON</option>
+                            <option value="xlsx">Excel (XLSX)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Colonnes à inclure</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="columns" value="name" id="colName" checked>
+                            <label class="form-check-label" for="colName">Nom</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="columns" value="status" id="colStatus" checked>
+                            <label class="form-check-label" for="colStatus">Statut</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="columns" value="dates" id="colDates" checked>
+                            <label class="form-check-label" for="colDates">Dates</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="columns" value="budget" id="colBudget">
+                            <label class="form-check-label" for="colBudget">Budget</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Annuler
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-download me-1"></i> Exporter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'import -->
+<div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-import me-2"></i>
+                    Importer des projets
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'projects:import' %}" enctype="multipart/form-data">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Fichier source</label>
+                        <input class="form-control" type="file" name="file" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Format</label>
+                        <select name="format" class="form-select">
+                            <option value="csv">CSV (Excel)</option>
+                            <option value="json">JSON</option>
+                            <option value="xlsx">Excel (XLSX)</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Les projets existants avec le même nom seront mis à jour.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i> Annuler
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-upload me-1"></i> Importer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Toggle entre vue carte et tableau
+    const cardViewBtn = document.getElementById('cardViewBtn');
+    const tableViewBtn = document.getElementById('tableViewBtn');
+    const cardView = document.getElementById('cardView');
+    const tableView = document.getElementById('tableView');
+
+    if (cardViewBtn && tableViewBtn) {
+        cardViewBtn.addEventListener('click', function() {
+            cardView.classList.remove('d-none');
+            tableView.classList.add('d-none');
+            cardViewBtn.classList.add('active');
+            tableViewBtn.classList.remove('active');
+            localStorage.setItem('projectViewMode', 'cards');
+        });
+
+        tableViewBtn.addEventListener('click', function() {
+            cardView.classList.add('d-none');
+            tableView.classList.remove('d-none');
+            cardViewBtn.classList.remove('active');
+            tableViewBtn.classList.add('active');
+            localStorage.setItem('projectViewMode', 'table');
+        });
+
+        // Restaurer la vue précédente
+        const savedViewMode = localStorage.getItem('projectViewMode');
+        if (savedViewMode === 'table') {
+            tableViewBtn.click();
+        }
+    }
+
+    // Recherche en temps réel
+    const projectSearch = document.getElementById('projectSearch');
+    if (projectSearch) {
+        projectSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            
+            // Filtrage pour la vue carte
+            document.querySelectorAll('#cardView .project-card').forEach(card => {
+                const cardText = card.textContent.toLowerCase();
+                card.style.display = cardText.includes(searchTerm) ? '' : 'none';
+            });
+            
+            // Filtrage pour la vue tableau
+            document.querySelectorAll('#tableView tbody tr').forEach(row => {
+                const rowText = row.textContent.toLowerCase();
+                row.style.display = rowText.includes(searchTerm) ? '' : 'none';
+            });
+        });
+    }
+
+    // Tri des projets
+    document.querySelectorAll('.sort-option').forEach(option => {
+        option.addEventListener('click', function(e) {
+            e.preventDefault();
+            const sortParam = this.getAttribute('data-sort');
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('sort', sortParam);
+            currentUrl.searchParams.set('page', '1');
+            window.location.href = currentUrl.toString();
+        });
+    });
+
+    // Initialisation des tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+
+<style>
+    /* Styles pour les cartes de projet */
+    .project-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .project-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    /* Styles pour la pagination */
+    .pagination .page-item.active .page-link {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+    }
+    
+    /* Styles pour les filtres */
+    #filterCollapse .card-body {
+        padding: 1.5rem;
+    }
+    
+    /* Styles pour la vue tableau */
+    #tableView table {
+        font-size: 0.9rem;
+    }
+    #tableView th {
+        font-weight: 500;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+    }
+</style>
+{% endblock %}

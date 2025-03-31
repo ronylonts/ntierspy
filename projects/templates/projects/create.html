@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-{{ view.title_icon }} me-2"></i>
+                        {{ view.title }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Section Principale -->
+                        <fieldset class="mb-4">
+                            <legend class="h5 border-bottom pb-2">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Informations de base
+                            </legend>
+                            {{ form.name|as_crispy_field }}
+                            {{ form.description|as_crispy_field }}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    {{ form.start_date|as_crispy_field }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.end_date|as_crispy_field }}
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <!-- Section Finance -->
+                        <fieldset class="mb-4">
+                            <legend class="h5 border-bottom pb-2">
+                                <i class="fas fa-euro-sign me-2"></i>
+                                Budget
+                            </legend>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    {{ form.budget|as_crispy_field }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.status|as_crispy_field }}
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <!-- Section Fichiers -->
+                        <fieldset class="mb-4">
+                            <legend class="h5 border-bottom pb-2">
+                                <i class="fas fa-paperclip me-2"></i>
+                                Documents
+                            </legend>
+                            {{ form.files|as_crispy_field }}
+                        </fieldset>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                            <a href="{% url 'projects:list' %}" class="btn btn-outline-secondary me-md-2">
+                                <i class="fas fa-times-circle me-1"></i> Annuler
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Enregistrer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Script pour la gestion des dates
+document.addEventListener('DOMContentLoaded', function() {
+    const startDate = document.getElementById('id_start_date');
+    const endDate = document.getElementById('id_end_date');
+    
+    if (startDate && endDate) {
+        startDate.addEventListener('change', function() {
+            endDate.min = this.value;
+        });
+    }
+});
+</script>
+{% endblock %}
